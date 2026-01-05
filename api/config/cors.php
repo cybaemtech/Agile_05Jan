@@ -13,43 +13,37 @@ $allowedOrigins = [
 ];
 
 // Get the origin from the request
-$requestOrigin = $_SERVER['HTTP_ORIGIN'] ?? $_SERVER['HTTP_REFERER'] ?? '';
-
-// Extract domain from referer if origin is not set
-if (empty($requestOrigin) && !empty($_SERVER['HTTP_REFERER'])) {
-    $requestOrigin = parse_url($_SERVER['HTTP_REFERER'], PHP_URL_SCHEME) . '://' . parse_url($_SERVER['HTTP_REFERER'], PHP_URL_HOST);
-}
+$requestOrigin = $_SERVER['HTTP_ORIGIN'] ?? '';
 
 // Log CORS debug info
 error_log('CORS Debug - Origin: ' . $requestOrigin . ', Method: ' . $_SERVER['REQUEST_METHOD']);
 
-// Allow the origin if it's in our allowed list
+// Determine which origin to allow
+$allowedOrigin = '';
+
 if (in_array($requestOrigin, $allowedOrigins)) {
-    header("Access-Control-Allow-Origin: {$requestOrigin}");
-    header('Access-Control-Allow-Credentials: true');
-    error_log('CORS: Allowing origin ' . $requestOrigin);
-} else {
-    // For unknown origins, allow the specific origin if it's from localhost (dev environment)
-    // This helps with various development scenarios
+    $allowedOrigin = $requestOrigin;
+    error_log('CORS: Allowing exact match origin ' . $requestOrigin);
+} elseif (!empty($requestOrigin)) {
+    // Check for localhost variants
     if (strpos($requestOrigin, 'localhost') !== false || strpos($requestOrigin, '127.0.0.1') !== false) {
-        header("Access-Control-Allow-Origin: {$requestOrigin}");
-        header('Access-Control-Allow-Credentials: true');
+        $allowedOrigin = $requestOrigin;
         error_log('CORS: Allowing localhost origin ' . $requestOrigin);
+    } elseif (strpos($requestOrigin, 'cybaemtech.') !== false) {
+        $allowedOrigin = $requestOrigin;
+        error_log('CORS: Allowing cybaemtech domain origin ' . $requestOrigin);
     } else {
-        // For production, allow the requesting origin if it's from cybaemtech domains
-        if (strpos($requestOrigin, 'cybaemtech.in') !== false || strpos($requestOrigin, 'cybaemtech.net') !== false) {
-            header("Access-Control-Allow-Origin: {$requestOrigin}");
-            header('Access-Control-Allow-Credentials: true');
-            error_log('CORS: Allowing cybaemtech origin ' . $requestOrigin);
-        } else {
-            // Last resort - allow the main domain but log the issue
-            header("Access-Control-Allow-Origin: https://cybaemtech.in");
-            header('Access-Control-Allow-Credentials: true');
-            error_log('CORS: WARNING - Unknown origin ' . $requestOrigin . ', defaulting to https://cybaemtech.in');
-        }
+        $allowedOrigin = 'https://cybaemtech.in';
+        error_log('CORS: Unknown origin ' . $requestOrigin . ', defaulting to https://cybaemtech.in');
     }
+} else {
+    $allowedOrigin = 'https://cybaemtech.in';
+    error_log('CORS: No origin provided, defaulting to https://cybaemtech.in');
 }
 
+// Set CORS headers
+header("Access-Control-Allow-Origin: {$allowedOrigin}");
+header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Max-Age: 86400');
 
 // Handle preflight requests

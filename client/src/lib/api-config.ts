@@ -2,9 +2,9 @@ import { queryClient } from "./queryClient";
 
 const getApiBaseUrl = () => {
   if (typeof window !== 'undefined') {
-    // Check if we're in preview mode (port 4173) - connect directly to deployed backend
+    // Check if we're in preview mode (port 4173) - use proxy
     if (window.location.port === '4173') {
-      return 'https://cybaemtech.in/Agile/api'; // Direct connection to deployed backend
+      return '/api'; // Use proxy to avoid CORS issues
     }
     
     // Use local proxy when running on localhost in development to avoid CORS issues
@@ -38,8 +38,8 @@ const getApiBaseUrl = () => {
     }
   }
   
-  // Use environment variable if set, otherwise default to deployed backend
-  return import.meta.env.VITE_API_BASE_URL || 'https://cybaemtech.in/Agile/api';
+  // Use environment variable if set, otherwise default to proxy
+  return import.meta.env.VITE_API_BASE_URL || '/api';
 };
 
 export const API_BASE_URL = getApiBaseUrl();

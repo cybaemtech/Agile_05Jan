@@ -55,6 +55,17 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 4173,
     allowedHosts: true,
+    proxy: {
+      '/api': {
+        target: 'https://cybaemtech.in',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '/Agile/api'),
+        secure: true,
+        headers: {
+          'Origin': 'https://cybaemtech.in'
+        }
+      },
+    },
   },
   resolve: {
     alias: {
