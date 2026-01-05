@@ -221,15 +221,29 @@ export default function Dashboard() {
   // Get work items by type - always show real data from database
   const workItemsByType = useMemo(() => {
     const types = ['EPIC', 'FEATURE', 'STORY', 'TASK', 'BUG'];
+    const now = new Date();
+    const nextTwoWeeks = addDays(now, 14);
 
     return types.map(type => {
       const typeItems = allWorkItems.filter(item => item.type === type);
       const completedItems = typeItems.filter(item => item.status === 'DONE');
+      const upcomingDeadlineItems = typeItems.filter(item => {
+        if (item.status === 'DONE') return false;
+        if (!item.endDate) return false;
+        const endDate = typeof item.endDate === 'string' ? parseISO(item.endDate) : item.endDate;
+        return isValid(endDate) && isAfter(endDate, now) && isBefore(endDate, nextTwoWeeks);
+      }).sort((a, b) => {
+        const dateA = typeof a.endDate === 'string' ? parseISO(a.endDate!) : a.endDate!;
+        const dateB = typeof b.endDate === 'string' ? parseISO(b.endDate!) : b.endDate!;
+        return dateA.getTime() - dateB.getTime();
+      });
 
       return {
         type,
         count: typeItems.length,
         completed: completedItems.length,
+        upcomingDeadlines: upcomingDeadlineItems.length,
+        upcomingDeadlineItems,
       };
     }).filter(typeData => typeData.count > 0 || projects.length > 0); // Only filter out types with 0 count if there are no projects
   }, [allWorkItems, projects]);
@@ -382,27 +396,89 @@ export default function Dashboard() {
               <CardContent>
                 {workItemsByType.length > 0 ? (
                   <div className="space-y-4">
-                    {workItemsByType.map(({ type, count, completed }) => {
+                    {workItemsByType.map(({ type, count, completed, upcomingDeadlines, upcomingDeadlineItems }) => {
                       const Icon = typeIcons[type as keyof typeof typeIcons];
                       const completionRate = count > 0 ? Math.round((completed / count) * 100) : 0;
 
                       return (
-                        <div key={type} className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3">
-                            <Icon className="h-4 w-4 text-gray-600" />
-                            <span className="font-medium">{type}</span>
-                          </div>
-                          <div className="flex items-center space-x-3">
-                            <span className="text-sm text-gray-600">
-                              {completed}/{count}
-                            </span>
-                            <div className="w-16">
-                              <Progress value={completionRate} className="h-2" />
+                        <div key={type} className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <Icon className="h-4 w-4 text-gray-600" />
+                              <span className="font-medium">{type}</span>
+                              {upcomingDeadlines > 0 && (
+                                <Badge variant="outline" className="text-xs px-2 py-0 bg-orange-50 text-orange-700 border-orange-200">
+                                  <Clock className="h-3 w-3 mr-1" />
+                                  {upcomingDeadlines} due
+                                </Badge>
+                              )}
                             </div>
-                            <span className="text-sm font-medium w-10 text-right">
-                              {completionRate}%
-                            </span>
+                            <div className="flex items-center space-x-3">
+                              <span className="text-sm text-gray-600">
+                                {completed}/{count}
+                              </span>
+                              <div className="w-16">
+                                <Progress value={completionRate} className="h-2" />
+                              </div>
+                              <span className="text-sm font-medium w-10 text-right">
+                                {completionRate}%
+                              </span>
+                            </div>
                           </div>
+                          
+                          {/* Show upcoming deadline details */}
+                          {upcomingDeadlineItems.length > 0 && (
+                            <div className="ml-7 space-y-2">
+                              {upcomingDeadlineItems.slice(0, 3).map(item => {
+                                const endDate = typeof item.endDate === 'string' ? parseISO(item.endDate) : new Date(item.endDate!);
+                                const daysUntilDeadline = differenceInDays(endDate, new Date());
+                                const isUrgent = daysUntilDeadline <= 3;
+                                const isWarning = daysUntilDeadline <= 7 && daysUntilDeadline > 3;
+
+                                return (
+                                  <div
+                                    key={item.id}
+                                    className={cn(
+                                      "flex items-center justify-between p-2 rounded-md border text-xs transition-colors cursor-pointer hover:bg-gray-50",
+                                      isUrgent ? "border-red-200 bg-red-50" : isWarning ? "border-yellow-200 bg-yellow-50" : "border-gray-200 bg-gray-50"
+                                    )}
+                                    onClick={() => setLocation(`/projects/${(item as any).projectId}`)}
+                                  >
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center space-x-2">
+                                        <span className="font-medium truncate">{item.externalId}</span>
+                                        {isUrgent && (
+                                          <AlertTriangle className="h-3 w-3 text-red-500" />
+                                        )}
+                                        {isWarning && (
+                                          <Clock className="h-3 w-3 text-yellow-500" />
+                                        )}
+                                      </div>
+                                      <p className="text-gray-600 truncate mt-1">{item.title}</p>
+                                    </div>
+                                    <div className="text-right ml-2">
+                                      <div className={cn(
+                                        "font-medium",
+                                        isUrgent ? "text-red-600" : isWarning ? "text-yellow-600" : "text-gray-900"
+                                      )}>
+                                        {daysUntilDeadline === 0 ? 'Today' :
+                                          daysUntilDeadline === 1 ? 'Tomorrow' :
+                                            `${daysUntilDeadline}d`}
+                                      </div>
+                                      <p className="text-gray-500">
+                                        {format(endDate, 'MMM d')}
+                                      </p>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                              {upcomingDeadlineItems.length > 3 && (
+                                <div className="text-center">
+                                  <p className="text-xs text-gray-500">+{upcomingDeadlineItems.length - 3} more</p>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -479,102 +555,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Upcoming Deadlines */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <Calendar className="h-4 w-4 mr-2" />
-                    Upcoming Deadlines
-                  </div>
-                  <Badge variant="outline" className="text-xs">
-                    {upcomingDeadlines.length} items
-                  </Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {upcomingDeadlines.length > 0 ? (
-                  <div className="space-y-3">
-                    {upcomingDeadlines.map(item => {
-                      const endDate = typeof item.endDate === 'string' ? parseISO(item.endDate) : new Date(item.endDate!);
-                      const daysUntilDeadline = differenceInDays(endDate, new Date());
-                      const isUrgent = daysUntilDeadline <= 3;
-                      const isWarning = daysUntilDeadline <= 7 && daysUntilDeadline > 3;
-
-                      return (
-                        <div
-                          key={item.id}
-                          className={cn(
-                            "flex items-center justify-between p-3 rounded-lg border transition-colors cursor-pointer hover:bg-gray-50",
-                            isUrgent ? "border-red-200 bg-red-50" : isWarning ? "border-yellow-200 bg-yellow-50" : "border-gray-200 bg-gray-50"
-                          )}
-                          onClick={() => setLocation(`/projects/${(item as any).projectId}`)}
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center space-x-2 mb-1">
-                              <p className="font-medium truncate">{item.externalId}</p>
-                              {isUrgent && (
-                                <AlertTriangle className="h-4 w-4 text-red-500" />
-                              )}
-                              {isWarning && (
-                                <Clock className="h-4 w-4 text-yellow-500" />
-                              )}
-                            </div>
-                            <p className="text-sm text-gray-600 truncate">{item.title}</p>
-                            <div className="flex items-center space-x-2 mt-2">
-                              {item.priority && (
-                                <Badge
-                                  variant="secondary"
-                                  className={cn(
-                                    "text-xs",
-                                    priorityColors[item.priority as keyof typeof priorityColors]
-                                  )}
-                                >
-                                  {item.priority}
-                                </Badge>
-                              )}
-                              <Badge variant="outline" className="text-xs">
-                                {item.type}
-                              </Badge>
-                              <Badge
-                                variant="secondary"
-                                className={cn(
-                                  "text-xs",
-                                  item.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
-                                )}
-                              >
-                                {item.status.replace('_', ' ')}
-                              </Badge>
-                            </div>
-                          </div>
-                          <div className="text-right ml-4">
-                            <div className={cn(
-                              "text-sm font-medium mb-1",
-                              isUrgent ? "text-red-600" : isWarning ? "text-yellow-600" : "text-gray-900"
-                            )}>
-                              {daysUntilDeadline === 0 ? 'Due Today' :
-                                daysUntilDeadline === 1 ? 'Due Tomorrow' :
-                                  `${daysUntilDeadline} days`}
-                            </div>
-                            <p className="text-xs text-gray-500">
-                              {format(endDate, 'MMM d, yyyy')}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <Calendar className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-600 mb-2">No upcoming deadlines</p>
-                    <p className="text-sm text-gray-500">All caught up for the next 2 weeks!</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
+          <div className="grid grid-cols-1 gap-6">
             {/* Recent Activity */}
             <Card>
               <CardHeader>

@@ -2,9 +2,10 @@ import React, { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Search, X, Users, Plus } from "lucide-react";
-import { format, endOfMonth, endOfQuarter, differenceInDays, differenceInMonths } from "date-fns";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Search, X, Users, Plus, BarChart3, ArrowLeft, ArrowRight } from "lucide-react";
+import { format, endOfMonth, endOfQuarter, differenceInDays, differenceInMonths, startOfMonth, endOfWeek, startOfWeek, addDays, addMonths, addWeeks, isSameMonth, isSameDay, parseISO, isValid } from "date-fns";
 import { cn } from "@/lib/utils";
 import { apiGet } from "@/lib/api-config";
 import { User, Team, Project, WorkItem as SchemaWorkItem } from "@shared/schema";
@@ -17,6 +18,8 @@ import {
 } from "@/components/ui/select";
 
 type GanttViewMode = 'month' | 'quarter' | 'year';
+type CalendarViewMode = 'month' | 'week';
+type TimelineTab = 'gantt' | 'calendar';
 
 interface WorkItem {
   id: number;
@@ -78,6 +81,235 @@ const statusBarColors: Record<string, string> = {
   ACTIVE: 'bg-green-500',
   COMPLETED: 'bg-gray-400',
   ARCHIVED: 'bg-gray-300'
+};
+
+// Calendar component colors
+const priorityColors = {
+  LOW: 'bg-green-100 text-green-800 border-green-200',
+  MEDIUM: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  HIGH: 'bg-orange-100 text-orange-800 border-orange-200',
+  CRITICAL: 'bg-red-100 text-red-800 border-red-200',
+};
+
+const typeColors = {
+  EPIC: 'bg-purple-100 text-purple-800',
+  FEATURE: 'bg-blue-100 text-blue-800',
+  STORY: 'bg-green-100 text-green-800',
+  TASK: 'bg-gray-100 text-gray-800',
+  BUG: 'bg-red-100 text-red-800',
+};
+
+// Calendar Component for Timeline
+const CalendarView = ({ 
+  projects, 
+  workItems, 
+  users 
+}: { 
+  projects: Project[], 
+  workItems: WorkItem[],
+  users: User[]
+}) => {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [calendarViewMode, setCalendarViewMode] = useState<CalendarViewMode>('month');
+  
+  // Filter work items with dates
+  const workItemsWithDates = useMemo(() => {
+    return workItems.filter(item => item.startDate || item.endDate).map(item => ({
+      ...item,
+      projectKey: projects.find(p => p.id === item.projectId)?.key || '',
+      projectName: projects.find(p => p.id === item.projectId)?.name || 'Unknown Project'
+    }));
+  }, [workItems, projects]);
+
+  // Generate calendar days
+  const calendarDays = useMemo(() => {
+    if (calendarViewMode === 'month') {
+      const start = startOfWeek(startOfMonth(currentDate));
+      const end = endOfWeek(endOfMonth(currentDate));
+      const days = [];
+      let current = start;
+
+      while (current <= end) {
+        days.push(current);
+        current = addDays(current, 1);
+      }
+
+      return days;
+    } else {
+      // Week view
+      const start = startOfWeek(currentDate);
+      const days = [];
+      for (let i = 0; i < 7; i++) {
+        days.push(addDays(start, i));
+      }
+      return days;
+    }
+  }, [currentDate, calendarViewMode]);
+
+  // Get work items for a specific date
+  const getWorkItemsForDate = (date: Date) => {
+    return workItemsWithDates.filter(item => {
+      if (!item.startDate && !item.endDate) return false;
+      
+      const startDate = item.startDate ? parseISO(item.startDate) : null;
+      const endDate = item.endDate ? parseISO(item.endDate) : null;
+      
+      if (startDate && endDate) {
+        return date >= startDate && date <= endDate;
+      } else if (startDate) {
+        return isSameDay(date, startDate);
+      } else if (endDate) {
+        return isSameDay(date, endDate);
+      }
+      
+      return false;
+    });
+  };
+
+  const navigateCalendar = (direction: 'prev' | 'next') => {
+    if (calendarViewMode === 'month') {
+      setCurrentDate(prev => addMonths(prev, direction === 'next' ? 1 : -1));
+    } else {
+      setCurrentDate(prev => addWeeks(prev, direction === 'next' ? 1 : -1));
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center">
+            <CalendarIcon className="h-4 w-4 mr-2" />
+            Project Calendar
+          </CardTitle>
+          <div className="flex items-center space-x-2">
+            <Select value={calendarViewMode} onValueChange={(value: CalendarViewMode) => setCalendarViewMode(value)}>
+              <SelectTrigger className="w-24">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="month">Month</SelectItem>
+                <SelectItem value="week">Week</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        
+        <div className="flex items-center justify-between mt-4">
+          <div className="flex items-center space-x-2">
+            <Button variant="outline" size="sm" onClick={() => navigateCalendar('prev')}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <h3 className="text-lg font-semibold">
+              {format(currentDate, calendarViewMode === 'month' ? 'MMMM yyyy' : 'MMM dd, yyyy')}
+            </h3>
+            <Button variant="outline" size="sm" onClick={() => navigateCalendar('next')}>
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setCurrentDate(new Date())}>
+            Today
+          </Button>
+        </div>
+      </CardHeader>
+      
+      <CardContent>
+        {/* Calendar Grid */}
+        <div className={cn("grid gap-1", calendarViewMode === 'month' ? "grid-cols-7" : "grid-cols-7")}>
+          {/* Day headers */}
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+            <div key={day} className="p-2 text-center font-semibold text-gray-600 border-b">
+              {day}
+            </div>
+          ))}
+          
+          {/* Calendar days */}
+          {calendarDays.map(date => {
+            const workItems = getWorkItemsForDate(date);
+            const isCurrentMonth = isSameMonth(date, currentDate);
+            const isToday = isSameDay(date, new Date());
+            
+            return (
+              <div
+                key={date.getTime()}
+                className={cn(
+                  "min-h-24 p-2 border border-gray-200",
+                  calendarViewMode === 'week' && "min-h-32",
+                  !isCurrentMonth && "bg-gray-50 text-gray-400",
+                  isToday && "bg-blue-50 border-blue-300",
+                )}
+              >
+                <div className={cn("text-sm font-medium mb-1", isToday && "text-blue-600")}>
+                  {format(date, 'd')}
+                </div>
+                
+                <div className="space-y-1">
+                  {workItems.slice(0, calendarViewMode === 'month' ? 3 : 8).map((item: any) => (
+                    <div
+                      key={item.id}
+                      className={cn(
+                        "text-xs p-1 rounded text-center cursor-pointer hover:opacity-80 border",
+                        typeColors[item.type as keyof typeof typeColors]
+                      )}
+                      title={`${item.externalId}: ${item.title} (${item.projectName})`}
+                    >
+                      <div className="font-medium truncate">{item.externalId}</div>
+                      <div className="truncate">{item.title}</div>
+                      {item.priority && (
+                        <Badge
+                          variant="secondary"
+                          className={cn(
+                            "text-xs px-1 py-0",
+                            priorityColors[item.priority as keyof typeof priorityColors]
+                          )}
+                        >
+                          {item.priority}
+                        </Badge>
+                      )}
+                    </div>
+                  ))}
+                  {workItems.length > (calendarViewMode === 'month' ? 3 : 8) && (
+                    <div className="text-xs text-gray-500 text-center">
+                      +{workItems.length - (calendarViewMode === 'month' ? 3 : 8)} more
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        
+        {/* Legend */}
+        <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+          <h3 className="font-semibold mb-2">Legend</h3>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div>
+              <div className="text-sm font-medium mb-1">Work Item Types</div>
+              <div className="space-y-1">
+                {Object.entries(typeColors).map(([type, color]) => (
+                  <div key={type} className="flex items-center space-x-2">
+                    <div className={cn("w-3 h-3 rounded", color)}></div>
+                    <span className="text-xs">{type}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm font-medium mb-1">Priority Levels</div>
+              <div className="space-y-1">
+                {Object.entries(priorityColors).map(([priority, color]) => (
+                  <div key={priority} className="flex items-center space-x-2">
+                    <div className={cn("w-3 h-3 rounded border", color)}></div>
+                    <span className="text-xs">{priority}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 };
 
 // Project Gantt Chart Component
@@ -542,6 +774,7 @@ const ProjectGanttChart = ({
 export default function Timeline() {
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [ganttViewMode, setGanttViewMode] = useState<GanttViewMode>('quarter');
+  const [activeTab, setActiveTab] = useState<TimelineTab>('gantt');
   
   const { data: currentUser } = useQuery<User>({
     queryKey: ['/auth/user'],
@@ -616,18 +849,59 @@ export default function Timeline() {
       />
       
       <div className="flex-1 flex flex-col overflow-hidden">
-        <main className="flex-1 overflow-auto">
-          <ProjectGanttChart 
-            projects={projects}
-            teams={teams}
-            workItems={allWorkItems}
-            users={users}
-            viewMode={ganttViewMode}
-            currentYear={currentYear}
-            onYearChange={setCurrentYear}
-            onViewModeChange={handleViewModeChange}
-            teamMemberCounts={teamMemberCounts}
-          />
+        {/* Tab Navigation */}
+        <div className="bg-white border-b border-gray-200 px-6 py-4">
+          <div className="flex items-center space-x-8">
+            <h1 className="text-2xl font-bold text-gray-900">Project Timeline</h1>
+            <nav className="flex space-x-8">
+              <button
+                onClick={() => setActiveTab('gantt')}
+                className={`border-b-2 pb-2 px-1 text-sm font-medium transition-colors ${
+                  activeTab === 'gantt'
+                    ? 'border-indigo-500 text-indigo-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <BarChart3 className="h-4 w-4 inline mr-2" />
+                Gantt Chart
+              </button>
+              <button
+                onClick={() => setActiveTab('calendar')}
+                className={`border-b-2 pb-2 px-1 text-sm font-medium transition-colors ${
+                  activeTab === 'calendar'
+                    ? 'border-indigo-500 text-indigo-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <CalendarIcon className="h-4 w-4 inline mr-2" />
+                Calendar View
+              </button>
+            </nav>
+          </div>
+        </div>
+
+        <main className="flex-1 overflow-auto p-6">
+          {activeTab === 'gantt' && (
+            <ProjectGanttChart 
+              projects={projects}
+              teams={teams}
+              workItems={allWorkItems}
+              users={users}
+              viewMode={ganttViewMode}
+              currentYear={currentYear}
+              onYearChange={setCurrentYear}
+              onViewModeChange={handleViewModeChange}
+              teamMemberCounts={teamMemberCounts}
+            />
+          )}
+          
+          {activeTab === 'calendar' && (
+            <CalendarView 
+              projects={projects}
+              workItems={allWorkItems}
+              users={users}
+            />
+          )}
         </main>
       </div>
     </div>
