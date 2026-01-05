@@ -583,12 +583,15 @@ const ProjectGanttChart = ({
       {/* Gantt Chart */}
       <div className="p-6">
         <div className="border rounded-lg bg-white overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto relative">
             <div className="min-w-[1200px]">
-              {/* Column Headers */}
-              <div className="flex border-b bg-gray-50 sticky top-0 z-20">
-                <div className="w-80 flex-shrink-0 p-3 font-semibold text-sm border-r bg-gray-50">
-                  Project Details
+              {/* Column Headers - Frozen Header */}
+              <div className="flex border-b bg-gray-50 sticky top-0 z-30 shadow-sm">
+                <div className="w-80 flex-shrink-0 p-3 font-semibold text-sm border-r bg-gray-50 sticky left-0 z-40">
+                  <div className="flex items-center justify-between">
+                    <span>Project Details</span>
+                    <span className="text-xs text-gray-500 font-normal">& Deadlines</span>
+                  </div>
                 </div>
                 <div className="flex-1 flex">
                   {timePeriods.map((period, idx) => (
@@ -611,8 +614,8 @@ const ProjectGanttChart = ({
                   
                   return (
                     <div key={row.id} className="flex border-b hover:bg-gray-50 transition-colors">
-                      {/* Project Metadata Panel - Fixed 320px */}
-                      <div className="w-80 flex-shrink-0 p-3 border-r bg-white">
+                      {/* Project Metadata Panel - Fixed 320px with Freeze Pane */}
+                      <div className="w-80 flex-shrink-0 p-3 border-r bg-white sticky left-0 z-20">
                         <div className="flex items-start gap-2 mb-1">
                           <span className={cn(
                             "px-2 py-0.5 rounded text-xs font-medium border",
@@ -624,6 +627,32 @@ const ProjectGanttChart = ({
                           {row.durationYears >= 2 && (
                             <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
                               {row.durationYears.toFixed(1)} years
+                            </span>
+                          )}
+                          {/* Deadline Indicator */}
+                          {row.targetDate && (
+                            <span className={cn(
+                              "text-xs px-1.5 py-0.5 rounded flex items-center gap-1",
+                              (() => {
+                                const today = new Date();
+                                const daysUntilDeadline = differenceInDays(row.targetDate, today);
+                                if (daysUntilDeadline < 0) return "bg-red-100 text-red-700 border border-red-200";
+                                if (daysUntilDeadline <= 7) return "bg-orange-100 text-orange-700 border border-orange-200";
+                                if (daysUntilDeadline <= 30) return "bg-yellow-100 text-yellow-700 border border-yellow-200";
+                                return "bg-blue-100 text-blue-700 border border-blue-200";
+                              })()
+                            )}>
+                              <CalendarIcon className="h-3 w-3" />
+                              {(() => {
+                                const today = new Date();
+                                const daysUntilDeadline = differenceInDays(row.targetDate, today);
+                                if (daysUntilDeadline < 0) return `${Math.abs(daysUntilDeadline)}d overdue`;
+                                if (daysUntilDeadline === 0) return "Due today";
+                                if (daysUntilDeadline === 1) return "Due tomorrow";
+                                if (daysUntilDeadline <= 7) return `${daysUntilDeadline}d left`;
+                                if (daysUntilDeadline <= 30) return `${daysUntilDeadline}d left`;
+                                return format(row.targetDate, 'MMM d');
+                              })()}
                             </span>
                           )}
                         </div>
