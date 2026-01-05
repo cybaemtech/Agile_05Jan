@@ -5,7 +5,9 @@
 $allowedOrigins = [
     'http://localhost:5000',
     'http://localhost:3000',
+    'http://localhost:4173',  // Vite preview port
     'http://127.0.0.1:5000',
+    'http://127.0.0.1:4173',  // Vite preview port
     'https://cybaemtech.in',
     'https://www.cybaemtech.in'
 ];
@@ -27,10 +29,25 @@ if (in_array($requestOrigin, $allowedOrigins)) {
     header('Access-Control-Allow-Credentials: true');
     error_log('CORS: Allowing origin ' . $requestOrigin);
 } else {
-    // For production, always allow the main domain
-    header("Access-Control-Allow-Origin: https://cybaemtech.in");
-    header('Access-Control-Allow-Credentials: true');
-    error_log('CORS: Default origin set to https://cybaemtech.in, requested was: ' . $requestOrigin);
+    // For unknown origins, allow the specific origin if it's from localhost (dev environment)
+    // This helps with various development scenarios
+    if (strpos($requestOrigin, 'localhost') !== false || strpos($requestOrigin, '127.0.0.1') !== false) {
+        header("Access-Control-Allow-Origin: {$requestOrigin}");
+        header('Access-Control-Allow-Credentials: true');
+        error_log('CORS: Allowing localhost origin ' . $requestOrigin);
+    } else {
+        // For production, allow the requesting origin if it's from cybaemtech domains
+        if (strpos($requestOrigin, 'cybaemtech.in') !== false || strpos($requestOrigin, 'cybaemtech.net') !== false) {
+            header("Access-Control-Allow-Origin: {$requestOrigin}");
+            header('Access-Control-Allow-Credentials: true');
+            error_log('CORS: Allowing cybaemtech origin ' . $requestOrigin);
+        } else {
+            // Last resort - allow the main domain but log the issue
+            header("Access-Control-Allow-Origin: https://cybaemtech.in");
+            header('Access-Control-Allow-Credentials: true');
+            error_log('CORS: WARNING - Unknown origin ' . $requestOrigin . ', defaulting to https://cybaemtech.in');
+        }
+    }
 }
 
 header('Access-Control-Max-Age: 86400');

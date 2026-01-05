@@ -33,6 +33,12 @@ const projectFormSchema = z.object({
   status: z.enum(["PLANNING", "ACTIVE", "COMPLETED"]).default("ACTIVE"),
   category: z.enum(["CLIENT", "IN_HOUSE"]).default("IN_HOUSE"),
   githubUrl: z.string().url({ message: "Please enter a valid GitHub URL" }).optional().or(z.literal("")),
+  startDate: z.string().optional(),
+  targetDate: z.string().optional().refine((date) => {
+    if (!date) return true; // Optional field
+    const parsedDate = new Date(date);
+    return !isNaN(parsedDate.getTime());
+  }, { message: "Please enter a valid date" }),
 });
 
 type ProjectFormValues = z.infer<typeof projectFormSchema>;
@@ -70,6 +76,8 @@ export function CreateProject({
       status: "ACTIVE",
       category: "IN_HOUSE",
       githubUrl: "",
+      startDate: "",
+      targetDate: "",
     },
   });
   
@@ -85,6 +93,8 @@ export function CreateProject({
         category: data.category,
         createdBy: userId,
         githubUrl: data.githubUrl || null,
+        startDate: data.startDate || null,
+        targetDate: data.targetDate || null,
       };
       
       console.log("Submitting project data:", projectData);
@@ -116,6 +126,10 @@ export function CreateProject({
             form.setError('name', { message: err.message });
           } else if (err.path === 'teamId') {
             form.setError('teamId', { message: err.message });
+          } else if (err.path === 'startDate') {
+            form.setError('startDate', { message: err.message });
+          } else if (err.path === 'targetDate') {
+            form.setError('targetDate', { message: err.message });
           }
         });
         
@@ -205,6 +219,51 @@ export function CreateProject({
                 </FormItem>
               )}
             />
+
+            {/* Project Dates */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="startDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Start Date (Optional)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        {...field} 
+                        type="date"
+                        value={field.value || ""}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      When the project is planned to begin
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="targetDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Target Date (Optional)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        {...field} 
+                        type="date"
+                        value={field.value || ""}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Expected completion date for the project
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
             
             {/* Category field - only visible to admins */}
             {isAdmin && (

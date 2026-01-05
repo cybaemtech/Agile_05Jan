@@ -87,6 +87,7 @@ export const projects = pgTable("projects", {
   teamId: integer("team_id").references(() => teams.id, { onDelete: 'set null' }),
   startDate: timestamp("start_date"),
   targetDate: timestamp("target_date"),
+  githubUrl: varchar("github_url", { length: 255 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => {

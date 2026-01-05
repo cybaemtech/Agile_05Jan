@@ -37,8 +37,17 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'https://cybaemtech.in',
         changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '/Agile/api'),
+        configure: (proxy, options) => {
+          proxy.on('error', (err, req, res) => {
+            console.error('Proxy error:', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            console.log('Proxying request to:', proxyReq.getHeader('host') + proxyReq.path);
+          });
+        },
       },
     },
   },
@@ -46,12 +55,6 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 4173,
     allowedHosts: true,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:5000',
-        changeOrigin: true,
-      },
-    },
   },
   resolve: {
     alias: {

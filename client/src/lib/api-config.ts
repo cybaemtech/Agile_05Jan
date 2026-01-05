@@ -2,7 +2,12 @@ import { queryClient } from "./queryClient";
 
 const getApiBaseUrl = () => {
   if (typeof window !== 'undefined') {
-    // Use local proxy when running on localhost to avoid CORS issues
+    // Check if we're in preview mode (port 4173) - connect directly to deployed backend
+    if (window.location.port === '4173') {
+      return 'https://cybaemtech.in/Agile/api'; // Direct connection to deployed backend
+    }
+    
+    // Use local proxy when running on localhost in development to avoid CORS issues
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
       return '/api'; // Vite proxy will forward to remote API
     }
@@ -11,6 +16,13 @@ const getApiBaseUrl = () => {
     if (window.location.hostname === 'cybaemtech.in' ||
         window.location.hostname === 'www.cybaemtech.in') {
       // Always use /Agile/api for production on cybaemtech.in
+      return '/Agile/api';
+    }
+    
+    // Production deployment on cybaemtech.net
+    if (window.location.hostname === 'cybaemtech.net' ||
+        window.location.hostname === 'www.cybaemtech.net') {
+      // Always use /Agile/api for production on cybaemtech.net
       return '/Agile/api';
     }
     
@@ -26,8 +38,8 @@ const getApiBaseUrl = () => {
     }
   }
   
-  // Use environment variable if set, otherwise default to /api for local development
-  return import.meta.env.VITE_API_BASE_URL || '/api';
+  // Use environment variable if set, otherwise default to deployed backend
+  return import.meta.env.VITE_API_BASE_URL || 'https://cybaemtech.in/Agile/api';
 };
 
 export const API_BASE_URL = getApiBaseUrl();
